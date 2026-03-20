@@ -97,7 +97,13 @@
 
                 <!-- Charts -->
                 <section class="chart-section">
-                    <h3 id="mainChartTitle">Equity Curve</h3>
+                    <div class="chart-header">
+                        <h3 id="mainChartTitle">Equity Curve</h3>
+                        <div id="growthToggle" class="toggle-group" style="display:none">
+                            <button class="toggle-btn active" data-mode="eur" onclick="setGrowthMode('eur')">EUR</button>
+                            <button class="toggle-btn" data-mode="pct" onclick="setGrowthMode('pct')">%</button>
+                        </div>
+                    </div>
                     <div class="chart-container"><canvas id="equityChart"></canvas></div>
                 </section>
 

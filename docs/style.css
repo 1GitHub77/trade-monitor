@@ -259,7 +259,44 @@ header h1 { font-size: 18px; font-weight: 600; }
     padding: 16px;
     margin-bottom: 24px;
 }
-.chart-section h3 { font-size: 14px; margin-bottom: 12px; }
+.chart-section h3 { font-size: 14px; margin-bottom: 0; }
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.toggle-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.toggle-btn {
+    padding: 4px 14px;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn:not(:last-child) {
+    border-right: 1px solid var(--border);
+}
+
+.toggle-btn.active {
+    background: #238636;
+    color: var(--text-primary);
+}
+
+.toggle-btn:hover:not(.active) {
+    background: var(--bg-hover);
+}
 .chart-container { position: relative; height: 300px; }
 
 /* ─── Tables ──────────────────────────────────────────────── */

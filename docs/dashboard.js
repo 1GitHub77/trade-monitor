@@ -7,6 +7,7 @@
 
 let tradeData = null;       // Raw data from Gist
 let currentFilter = { type: 'all' };
+let growthMode = 'eur';     // 'eur' or 'pct'
 let equityChart = null;
 let drawdownChart = null;
 
@@ -572,31 +573,63 @@ function initCharts() {
     });
 }
 
+function setGrowthMode(mode) {
+    growthMode = mode;
+    document.querySelectorAll('.toggle-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    renderAll();
+}
+
 function renderMainChart(deals, initialBalance, isAllFilter) {
     const exits = deals.filter(d => d.entry === 1).sort((a, b) => a.time - b.time);
     if (exits.length === 0) { equityChart.data.datasets = []; equityChart.update(); return; }
 
-    // Update chart title
+    // Show/hide toggle (only for individual EAs)
+    const toggle = document.getElementById('growthToggle');
+    if (toggle) toggle.style.display = isAllFilter ? 'none' : 'flex';
+
     const titleEl = document.getElementById('mainChartTitle');
-    if (titleEl) titleEl.textContent = isAllFilter ? 'Equity Curve' : 'Growth Curve (P/L)';
+    const isPct = !isAllFilter && growthMode === 'pct';
+
+    if (isAllFilter) {
+        if (titleEl) titleEl.textContent = 'Equity Curve';
+    } else {
+        if (titleEl) titleEl.textContent = isPct ? 'Growth Curve (%)' : 'Growth Curve (EUR)';
+    }
+
+    // Get account balance for % calculation
+    const account = tradeData.account || {};
+    const accountBalance = account.balance || 10000;
+    const balanceForPct = isAllFilter ? accountBalance : accountBalance;
 
     const points = [];
     let running = initialBalance;
     for (const d of exits) {
-        running += calcPnl(d);
-        points.push({ x: d.time * 1000, y: r2(running), profit: r2(calcPnl(d)), comment: getEAName(d) });
+        const pnl = calcPnl(d);
+        running += pnl;
+        const yValue = isPct ? r2((running / balanceForPct) * 100) : r2(running);
+        points.push({ x: d.time * 1000, y: yValue, profit: r2(pnl), comment: getEAName(d), eurValue: r2(running) });
     }
 
-    // Y-axis label
-    const yLabel = isAllFilter ? 'Equity' : 'P/L';
-
+    // Tooltip
     equityChart.options.plugins.tooltip.callbacks.label = ctx => {
         const p = ctx.raw;
-        let l = `${yLabel}: ${fmt$(p.y)}`;
+        let l;
+        if (isAllFilter) {
+            l = `Equity: ${fmt$(p.y)}`;
+        } else if (isPct) {
+            l = `Growth: ${p.y}% (${fmt$(p.eurValue)})`;
+        } else {
+            l = `P/L: ${fmt$(p.y)}`;
+        }
         if (p.profit) l += ` | Trade: ${fmt$(p.profit)}`;
         if (p.comment) l += ` | ${p.comment}`;
         return l;
     };
+
+    // Y-axis format
+    equityChart.options.scales.y.ticks.callback = isPct ? (v => v.toFixed(1) + '%') : (v => fmt$(v));
 
     equityChart.data.datasets = [{
         data: points,
