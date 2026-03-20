@@ -190,15 +190,18 @@ function renderAll() {
     // For individual EA: growth curve (cumulative P/L starting from 0)
     const allExits = deals.filter(d => d.entry === 1);
     const totalPnl = allExits.reduce((s, d) => s + calcPnl(d), 0);
-    const initialBalance = isAllFilter ? (account.balance || 0) - totalPnl : 0;
+    const accountBalance = account.balance || 0;
+    const initialBalance = isAllFilter ? accountBalance - totalPnl : 0;
+    // For DD% calculation: always use account balance as reference
+    const ddReference = accountBalance > 0 ? accountBalance : (accountBalance - totalPnl);
 
-    const stats = calculateStats(deals, positions, initialBalance);
+    const stats = calculateStats(deals, positions, initialBalance, ddReference);
 
     renderAccount(account);
     renderFilters();
     renderStats(stats);
     renderMainChart(deals, initialBalance, isAllFilter);
-    renderDrawdownChart(deals, initialBalance);
+    renderDrawdownChart(deals, initialBalance, ddReference);
     renderDeals(allExits);
     renderPositions(positions);
     renderBacktest(stats);
@@ -296,7 +299,7 @@ function calcPnl(d) {
     return (d.profit || 0) + (d.commission || 0) + (d.swap || 0);
 }
 
-function calculateStats(deals, positions, initialBalance) {
+function calculateStats(deals, positions, initialBalance, ddReference) {
     const exits = deals.filter(d => d.entry === 1).sort((a, b) => a.time - b.time);
     const entries = {};
     deals.filter(d => d.entry === 0).forEach(d => { entries[d.position_id] = d; });
@@ -323,11 +326,13 @@ function calculateStats(deals, positions, initialBalance) {
     let running = initialBalance;
     for (const pnl of pnls) { running += pnl; eqCurve.push(running); }
 
+    // DD% uses account balance as reference (not EA peak profit)
+    const ddRef = ddReference || (eqCurve[0] || initialBalance);
     let maxDD = 0, maxDDPct = 0, peak = eqCurve[0] || initialBalance;
     for (const eq of eqCurve) {
         if (eq > peak) peak = eq;
         const dd = peak - eq;
-        const ddPct = peak > 0 ? dd / peak * 100 : 0;
+        const ddPct = ddRef > 0 ? dd / ddRef * 100 : 0;
         if (dd > maxDD) maxDD = dd;
         if (ddPct > maxDDPct) maxDDPct = ddPct;
     }
@@ -378,7 +383,7 @@ function calculateStats(deals, positions, initialBalance) {
     const curEquity = eqCurve.length > 0 ? eqCurve[eqCurve.length - 1] : initialBalance;
     const curPeak = eqCurve.length > 0 ? Math.max(...eqCurve) : initialBalance;
     const curDD = curPeak - curEquity;
-    const curDDPct = curPeak > 0 ? curDD / curPeak * 100 : 0;
+    const curDDPct = ddRef > 0 ? curDD / ddRef * 100 : 0;
 
     return {
         net_profit: r2(netProfit), gross_profit: r2(grossProfit), gross_loss: r2(grossLoss),
@@ -639,16 +644,18 @@ function renderMainChart(deals, initialBalance, isAllFilter) {
     equityChart.update();
 }
 
-function renderDrawdownChart(deals, initialBalance) {
+function renderDrawdownChart(deals, initialBalance, ddReference) {
     const exits = deals.filter(d => d.entry === 1).sort((a, b) => a.time - b.time);
     if (exits.length === 0) { drawdownChart.data.datasets = []; drawdownChart.update(); return; }
 
+    const ddRef = ddReference || initialBalance;
     const points = [];
     let running = initialBalance, peak = initialBalance;
     for (const d of exits) {
         running += calcPnl(d);
         if (running > peak) peak = running;
-        const ddPct = peak > 0 ? (peak - running) / peak * 100 : 0;
+        const dd = peak - running;
+        const ddPct = ddRef > 0 ? dd / ddRef * 100 : 0;
         points.push({ x: d.time * 1000, y: r2(ddPct) });
     }
 
