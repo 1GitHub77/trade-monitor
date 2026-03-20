@@ -83,7 +83,15 @@ string TM_BuildDealsJSON(int historyDays)
       json += TM_KVD("profit", HistoryDealGetDouble(ticket, DEAL_PROFIT)) + ",";
       json += TM_KVD("commission", HistoryDealGetDouble(ticket, DEAL_COMMISSION)) + ",";
       json += TM_KVD("swap", HistoryDealGetDouble(ticket, DEAL_SWAP)) + ",";
-      json += TM_KVS("comment", HistoryDealGetString(ticket, DEAL_COMMENT));
+      json += TM_KVS("comment", HistoryDealGetString(ticket, DEAL_COMMENT)) + ",";
+
+      //--- Get original order comment (EA name) - broker often overwrites deal comment
+      string orderComment = "";
+      long orderTicket = HistoryDealGetInteger(ticket, DEAL_ORDER);
+      if(orderTicket > 0 && HistoryOrderSelect((ulong)orderTicket))
+         orderComment = HistoryOrderGetString((ulong)orderTicket, ORDER_COMMENT);
+      json += TM_KVS("order_comment", orderComment);
+
       json += "}";
       exported++;
    }

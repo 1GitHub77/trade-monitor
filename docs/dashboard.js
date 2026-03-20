@@ -223,6 +223,11 @@ function baseMagic(magic) {
     return Math.floor((magic || 0) / 1000) * 1000;
 }
 
+function getEAName(deal) {
+    // Prefer order_comment (original EA name) over comment (often broker-modified with SL/TP)
+    return deal.order_comment || deal.comment || '';
+}
+
 // ─── Filters ─────────────────────────────────────────────────
 
 function renderFilters() {
@@ -230,37 +235,21 @@ function renderFilters() {
     const list = document.getElementById('filterList');
     list.innerHTML = '';
 
-    // Use ENTRY deals (entry=0) for comments — exit deals often have broker-modified SL/TP comments
     const allDeals = tradeData.deals || [];
-    const entries = allDeals.filter(d => d.entry === 0);
     const exits = allDeals.filter(d => d.entry === 1);
     const groups = {};
 
-    // Build groups from exit deals (these have the P/L)
-    exits.forEach(d => {
+    // Build groups — prefer order_comment (original EA name) over comment (broker-modified)
+    allDeals.forEach(d => {
         const base = baseMagic(d.magic);
         if (!groups[base]) groups[base] = { base, strategies: {}, comment: '' };
-        if (!groups[base].strategies[d.magic]) {
-            groups[base].strategies[d.magic] = '';
-        }
-    });
 
-    // Get EA/strategy names from entry deal comments
-    entries.forEach(d => {
-        const base = baseMagic(d.magic);
-        if (!groups[base]) return;
-        const comment = d.comment || '';
-        if (!comment) return;
-        // Set strategy-level comment
-        if (!groups[base].strategies[d.magic] || groups[base].strategies[d.magic] === '') {
-            groups[base].strategies[d.magic] = comment;
+        const name = getEAName(d);
+        if (!groups[base].strategies[d.magic] && exits.some(e => e.magic === d.magic)) {
+            groups[base].strategies[d.magic] = name;
         }
-        // Set group-level comment (from base magic or first found)
-        if (d.magic === base && !groups[base].comment) {
-            groups[base].comment = comment;
-        }
-        if (!groups[base].comment) {
-            groups[base].comment = comment;
+        if (name && !groups[base].comment) {
+            groups[base].comment = name;
         }
     });
 
@@ -589,7 +578,7 @@ function renderEquityChart(deals, initialBalance) {
     let running = initialBalance;
     for (const d of exits) {
         running += calcPnl(d);
-        points.push({ x: d.time * 1000, y: r2(running), profit: r2(calcPnl(d)), comment: d.comment || '' });
+        points.push({ x: d.time * 1000, y: r2(running), profit: r2(calcPnl(d)), comment: getEAName(d) });
     }
 
     equityChart.data.datasets = [{
@@ -636,7 +625,7 @@ function renderDeals(exits) {
             <td>${d.type === 0 ? 'Buy' : 'Sell'}</td>
             <td>${d.volume}</td>
             <td>${d.magic}</td>
-            <td>${esc(d.comment || '')}</td>
+            <td>${esc(getEAName(d))}</td>
             <td class="${pnl >= 0 ? 'profit-positive' : 'profit-negative'}">${fmt$(pnl)}</td>
         `;
         tbody.appendChild(tr);
