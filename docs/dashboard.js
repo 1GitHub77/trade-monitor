@@ -183,18 +183,20 @@ function renderAll() {
 
     const { deals, positions } = getFilteredData();
     const account = tradeData.account || {};
+    const isAllFilter = currentFilter.type === 'all';
 
-    // Compute initial balance for equity curve
+    // For "Alle": equity curve (absolute balance)
+    // For individual EA: growth curve (cumulative P/L starting from 0)
     const allExits = deals.filter(d => d.entry === 1);
     const totalPnl = allExits.reduce((s, d) => s + calcPnl(d), 0);
-    const initialBalance = (account.balance || 0) - totalPnl;
+    const initialBalance = isAllFilter ? (account.balance || 0) - totalPnl : 0;
 
     const stats = calculateStats(deals, positions, initialBalance);
 
     renderAccount(account);
     renderFilters();
     renderStats(stats);
-    renderEquityChart(deals, initialBalance);
+    renderMainChart(deals, initialBalance, isAllFilter);
     renderDrawdownChart(deals, initialBalance);
     renderDeals(allExits);
     renderPositions(positions);
@@ -570,9 +572,13 @@ function initCharts() {
     });
 }
 
-function renderEquityChart(deals, initialBalance) {
+function renderMainChart(deals, initialBalance, isAllFilter) {
     const exits = deals.filter(d => d.entry === 1).sort((a, b) => a.time - b.time);
     if (exits.length === 0) { equityChart.data.datasets = []; equityChart.update(); return; }
+
+    // Update chart title
+    const titleEl = document.getElementById('mainChartTitle');
+    if (titleEl) titleEl.textContent = isAllFilter ? 'Equity Curve' : 'Growth Curve (P/L)';
 
     const points = [];
     let running = initialBalance;
@@ -580,6 +586,17 @@ function renderEquityChart(deals, initialBalance) {
         running += calcPnl(d);
         points.push({ x: d.time * 1000, y: r2(running), profit: r2(calcPnl(d)), comment: getEAName(d) });
     }
+
+    // Y-axis label
+    const yLabel = isAllFilter ? 'Equity' : 'P/L';
+
+    equityChart.options.plugins.tooltip.callbacks.label = ctx => {
+        const p = ctx.raw;
+        let l = `${yLabel}: ${fmt$(p.y)}`;
+        if (p.profit) l += ` | Trade: ${fmt$(p.profit)}`;
+        if (p.comment) l += ` | ${p.comment}`;
+        return l;
+    };
 
     equityChart.data.datasets = [{
         data: points,
