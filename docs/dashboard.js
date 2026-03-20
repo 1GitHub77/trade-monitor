@@ -648,7 +648,14 @@ function renderDrawdownChart(deals, initialBalance, ddReference) {
     const exits = deals.filter(d => d.entry === 1).sort((a, b) => a.time - b.time);
     if (exits.length === 0) { drawdownChart.data.datasets = []; drawdownChart.update(); return; }
 
+    const isAllFilter = currentFilter.type === 'all';
+    const showEur = !isAllFilter && growthMode === 'eur';
     const ddRef = ddReference || initialBalance;
+
+    // Update DD chart title
+    const titleEl = document.getElementById('ddChartTitle');
+    if (titleEl) titleEl.textContent = showEur ? 'Drawdown (EUR)' : 'Drawdown (%)';
+
     const points = [];
     let running = initialBalance, peak = initialBalance;
     for (const d of exits) {
@@ -656,8 +663,19 @@ function renderDrawdownChart(deals, initialBalance, ddReference) {
         if (running > peak) peak = running;
         const dd = peak - running;
         const ddPct = ddRef > 0 ? dd / ddRef * 100 : 0;
-        points.push({ x: d.time * 1000, y: r2(ddPct) });
+        points.push({ x: d.time * 1000, y: showEur ? r2(dd) : r2(ddPct), eur: r2(dd), pct: r2(ddPct) });
     }
+
+    // Y-axis format
+    drawdownChart.options.scales.y.ticks.callback = showEur ? (v => fmt$(v)) : (v => v.toFixed(1) + '%');
+
+    // Tooltip
+    drawdownChart.options.plugins.tooltip.callbacks = {
+        label: ctx => {
+            const p = ctx.raw;
+            return showEur ? `DD: ${fmt$(p.eur)} (${p.pct}%)` : `DD: ${p.pct}% (${fmt$(p.eur)})`;
+        }
+    };
 
     drawdownChart.data.datasets = [{
         data: points,
