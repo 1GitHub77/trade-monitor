@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Monitor</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+    <!-- Setup Panel (shown when no Gist ID configured) -->
+    <div id="setupPanel" class="setup-panel" style="display:none">
+        <div class="setup-card">
+            <h2>Trade Monitor</h2>
+            <p>Gib deine GitHub Gist ID ein um die Trade-Daten zu laden.</p>
+            <p class="hint">Die Gist ID findest du in der URL deines Gists:<br>
+                <code>gist.github.com/username/<strong>GIST_ID</strong></code></p>
+            <input type="text" id="gistIdInput" placeholder="z.B. a1b2c3d4e5f6...">
+            <button class="btn btn-primary" onclick="saveSetup()">Verbinden</button>
+            <div id="setupError" class="error-msg"></div>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" style="display:none">
+        <header>
+            <h1>Trade Monitor</h1>
+            <div class="header-right">
+                <span id="lastSync" class="sync-info"></span>
+                <button id="btnRefresh" class="btn" onclick="refreshData()">Aktualisieren</button>
+                <button class="btn btn-small" onclick="showSettings()" title="Einstellungen">&#9881;</button>
+            </div>
+        </header>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal" style="display:none">
+            <div class="modal-content">
+                <h3>Einstellungen</h3>
+                <label>GitHub Gist ID</label>
+                <input type="text" id="settingsGistId">
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeSettings()">Abbrechen</button>
+                    <button class="btn btn-primary" onclick="updateSettings()">Speichern</button>
+                    <button class="btn btn-danger" onclick="clearAllData()">Alle Daten loeschen</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Sidebar: EA Filter -->
+            <aside class="sidebar" id="sidebar">
+                <h3>EAs / Strategien</h3>
+                <div class="filter-group">
+                    <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">Alle</button>
+                    <div id="filterList"></div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="content">
+                <!-- Account Bar -->
+                <div class="account-bar" id="accountBar">
+                    <span class="text-muted">Lade Daten...</span>
+                </div>
+
+                <!-- Stats Grid -->
+                <section class="stats-grid" id="statsGrid">
+                    <div class="stat-card" id="statNetProfit"><span class="stat-label">Net Profit</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statPF"><span class="stat-label">Profit Factor</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statRF"><span class="stat-label">Recovery Factor</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statWinRate"><span class="stat-label">Win Rate</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statTrades"><span class="stat-label">Total Trades</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statTPW"><span class="stat-label">Trades / Woche</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statMaxDD"><span class="stat-label">Max Drawdown</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statCurDD"><span class="stat-label">Current DD</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statSharpe"><span class="stat-label">Sharpe Ratio</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statLargestWin"><span class="stat-label">Largest Win</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statLargestLoss"><span class="stat-label">Largest Loss</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statAvgWin"><span class="stat-label">Avg Win</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statAvgLoss"><span class="stat-label">Avg Loss</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statConsecWins"><span class="stat-label">Consec. Wins</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statConsecLosses"><span class="stat-label">Consec. Losses</span><span class="stat-value">—</span></div>
+                    <div class="stat-card" id="statAvgDuration"><span class="stat-label">Avg Duration</span><span class="stat-value">—</span></div>
+                    <div class="stat-card highlight" id="statOpenPnL"><span class="stat-label">Open P/L</span><span class="stat-value">—</span></div>
+                    <div class="stat-card highlight" id="statOpenPos"><span class="stat-label">Open Positions</span><span class="stat-value">—</span></div>
+                </section>
+
+                <!-- Backtest Comparison -->
+                <section class="backtest-comparison" id="backtestSection" style="display:none">
+                    <h3>Live vs. Backtest</h3>
+                    <table id="backtestTable">
+                        <thead><tr><th>Statistik</th><th>Live</th><th>Backtest</th><th>Diff</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </section>
+
+                <!-- Charts -->
+                <section class="chart-section">
+                    <h3>Equity Curve</h3>
+                    <div class="chart-container"><canvas id="equityChart"></canvas></div>
+                </section>
+
+                <section class="chart-section">
+                    <h3>Drawdown</h3>
+                    <div class="chart-container"><canvas id="drawdownChart"></canvas></div>
+                </section>
+
+                <!-- Trades Table -->
+                <section class="table-section">
+                    <h3>Letzte Trades</h3>
+                    <div class="table-wrapper">
+                        <table id="tradesTable">
+                            <thead><tr>
+                                <th>Zeit</th><th>Symbol</th><th>Typ</th><th>Volume</th>
+                                <th>Magic</th><th>Kommentar</th><th>Profit</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Open Positions -->
+                <section class="table-section">
+                    <h3>Offene Positionen</h3>
+                    <div class="table-wrapper">
+                        <table id="positionsTable">
+                            <thead><tr>
+                                <th>Symbol</th><th>Typ</th><th>Volume</th><th>Open Price</th>
+                                <th>Current</th><th>Magic</th><th>Kommentar</th><th>Profit</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Backtest Upload -->
+                <section class="upload-section">
+                    <h3>Backtest Report importieren</h3>
+                    <form id="uploadForm" onsubmit="uploadBacktest(event)">
+                        <input type="file" id="btFile" accept=".html,.htm" required>
+                        <input type="number" id="btMagic" placeholder="Magic Number (optional)">
+                        <button type="submit" class="btn">Import</button>
+                    </form>
+                    <div id="uploadStatus"></div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

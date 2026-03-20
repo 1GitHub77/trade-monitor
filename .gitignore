@@ -1,0 +1,6 @@
+Token.txt
+*.pyc
+__pycache__/
+pi/data/
+pi/config.yaml
+.env
