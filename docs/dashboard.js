@@ -230,35 +230,55 @@ function renderFilters() {
     const list = document.getElementById('filterList');
     list.innerHTML = '';
 
-    const exits = (tradeData.deals || []).filter(d => d.entry === 1);
+    // Use ENTRY deals (entry=0) for comments — exit deals often have broker-modified SL/TP comments
+    const allDeals = tradeData.deals || [];
+    const entries = allDeals.filter(d => d.entry === 0);
+    const exits = allDeals.filter(d => d.entry === 1);
     const groups = {};
 
+    // Build groups from exit deals (these have the P/L)
     exits.forEach(d => {
         const base = baseMagic(d.magic);
         if (!groups[base]) groups[base] = { base, strategies: {}, comment: '' };
         if (!groups[base].strategies[d.magic]) {
-            groups[base].strategies[d.magic] = d.comment || '';
+            groups[base].strategies[d.magic] = '';
         }
-        if (d.magic === base && d.comment) groups[base].comment = d.comment;
-        if (!groups[base].comment && d.comment) {
-            groups[base].comment = d.comment.includes('_') ? d.comment.split('_')[0] : d.comment;
+    });
+
+    // Get EA/strategy names from entry deal comments
+    entries.forEach(d => {
+        const base = baseMagic(d.magic);
+        if (!groups[base]) return;
+        const comment = d.comment || '';
+        if (!comment) return;
+        // Set strategy-level comment
+        if (!groups[base].strategies[d.magic] || groups[base].strategies[d.magic] === '') {
+            groups[base].strategies[d.magic] = comment;
+        }
+        // Set group-level comment (from base magic or first found)
+        if (d.magic === base && !groups[base].comment) {
+            groups[base].comment = comment;
+        }
+        if (!groups[base].comment) {
+            groups[base].comment = comment;
         }
     });
 
     Object.values(groups).sort((a, b) => a.base - b.base).forEach(group => {
-        const comment = group.comment || `EA ${group.base}`;
+        const displayName = group.comment || `EA ${group.base}`;
         const btn = el('button', 'filter-btn' + (currentFilter.type === 'base' && currentFilter.value === group.base ? ' active' : ''));
         btn.dataset.filter = `base:${group.base}`;
-        btn.innerHTML = `${esc(comment)} <span class="magic-label">${group.base}</span>`;
+        btn.innerHTML = `${esc(displayName)} <span class="magic-label">${group.base}</span>`;
         btn.onclick = () => setFilter('base', group.base);
         list.appendChild(btn);
 
         Object.entries(group.strategies).sort(([a],[b]) => a - b).forEach(([magic, cmt]) => {
             magic = Number(magic);
             if (magic === group.base) return;
+            const subDisplay = cmt || `Strategie ${magic % 1000}`;
             const sub = el('button', 'filter-btn sub' + (currentFilter.type === 'magic' && currentFilter.value === magic ? ' active' : ''));
             sub.dataset.filter = `magic:${magic}`;
-            sub.innerHTML = `${esc(cmt || `Strategie ${magic % 1000}`)} <span class="magic-label">${magic}</span>`;
+            sub.innerHTML = `${esc(subDisplay)} <span class="magic-label">${magic}</span>`;
             sub.onclick = () => setFilter('magic', magic);
             list.appendChild(sub);
         });
